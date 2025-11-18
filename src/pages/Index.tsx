@@ -2,16 +2,20 @@ import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import ProductCard from '@/components/ProductCard';
 import { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
+
+type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc';
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [shoppingList, setShoppingList] = useState<Product[]>([]);
   const [database, setDatabase] = useState<Product[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -130,6 +134,57 @@ const Index = () => {
     );
   };
 
+  const sortProducts = (products: Product[]) => {
+    const sorted = [...products];
+    
+    switch (sortBy) {
+      case 'date-desc':
+        return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      case 'date-asc':
+        return sorted.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      case 'name-asc':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-desc':
+        return sorted.sort((a, b) => b.name.localeCompare(a.name));
+      case 'price-asc':
+        return sorted.sort((a, b) => a.buyPrice - b.buyPrice);
+      case 'price-desc':
+        return sorted.sort((a, b) => b.buyPrice - a.buyPrice);
+      default:
+        return sorted;
+    }
+  };
+
+  const groupProductsByDate = (products: Product[]) => {
+    const grouped: Record<string, Product[]> = {};
+    
+    products.forEach(product => {
+      const date = new Date(product.createdAt).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(product);
+    });
+    
+    return grouped;
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white sticky top-0 z-10">
@@ -221,26 +276,59 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="database" className="space-y-4">
-            <div className="mb-4">
+            <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
                 Всего в базе: {database.length}
               </h2>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Сортировка" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-desc">Новые первыми</SelectItem>
+                  <SelectItem value="date-asc">Старые первыми</SelectItem>
+                  <SelectItem value="name-asc">По названию А-Я</SelectItem>
+                  <SelectItem value="name-desc">По названию Я-А</SelectItem>
+                  <SelectItem value="price-asc">По цене ↑</SelectItem>
+                  <SelectItem value="price-desc">По цене ↓</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-3">
-              {filterProducts(database).map(product => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onUpdate={() => {}}
-                  onDelete={() => deleteFromDatabase(product.id)}
-                  isSelected={false}
-                  onToggleSelect={() => {}}
-                  showCheckbox={false}
-                  readOnly={true}
-                />
-              ))}
-            </div>
+            {(() => {
+              const filtered = filterProducts(database);
+              const sorted = sortProducts(filtered);
+              const grouped = groupProductsByDate(sorted);
+              const dates = Object.keys(grouped).sort((a, b) => {
+                const dateA = new Date(grouped[a][0].createdAt);
+                const dateB = new Date(grouped[b][0].createdAt);
+                return sortBy.startsWith('date-asc') ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+              });
+
+              return dates.map(date => (
+                <div key={date} className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="Calendar" size={18} className="text-muted-foreground" />
+                    <h3 className="text-lg font-semibold text-foreground">{date}</h3>
+                    <span className="text-sm text-muted-foreground">({grouped[date].length})</span>
+                  </div>
+                  <div className="space-y-3">
+                    {grouped[date].map(product => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onUpdate={() => {}}
+                        onDelete={() => deleteFromDatabase(product.id)}
+                        isSelected={false}
+                        onToggleSelect={() => {}}
+                        showCheckbox={false}
+                        readOnly={true}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
 
             {database.length === 0 && (
               <div className="text-center py-16 text-muted-foreground">

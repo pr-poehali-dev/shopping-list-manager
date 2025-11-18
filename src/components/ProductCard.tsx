@@ -39,6 +39,17 @@ const ProductCard = ({
     buyPrice: false,
   });
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -78,16 +89,22 @@ const ProductCard = ({
 
   return (
     <Card className="p-4 bg-white border-border hover:shadow-md transition-shadow">
-      <div className="flex gap-3 items-start">
-        {showCheckbox && (
-          <div className="pt-2">
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={onToggleSelect}
-              className="w-5 h-5"
-            />
-          </div>
-        )}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+          <Icon name="Clock" size={14} />
+          <span>{formatDateTime(product.createdAt)}</span>
+        </div>
+        
+        <div className="flex gap-3 items-start">
+          {showCheckbox && (
+            <div className="pt-2">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={onToggleSelect}
+                className="w-5 h-5"
+              />
+            </div>
+          )}
 
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
           <div className="md:col-span-1 flex justify-center">
@@ -307,6 +324,7 @@ const ProductCard = ({
             <Icon name="Trash2" size={18} />
           </Button>
         )}
+      </div>
       </div>
 
       <Dialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog}>
