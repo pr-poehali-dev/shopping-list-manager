@@ -3,9 +3,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
 import ProductCard from '@/components/ProductCard';
-import { Product } from '@/types/product';
+import ContractorCard from '@/components/ContractorCard';
+import ContractorDetail from '@/components/ContractorDetail';
+import { Product, Contractor, ContractorPurchase, ContractorStats } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
 
 type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc';
@@ -14,19 +17,32 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [shoppingList, setShoppingList] = useState<Product[]>([]);
   const [database, setDatabase] = useState<Product[]>([]);
+  const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [contractorPurchases, setContractorPurchases] = useState<ContractorPurchase[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
+  const [showAddContractorDialog, setShowAddContractorDialog] = useState(false);
+  const [newContractorName, setNewContractorName] = useState('');
+  const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     const savedShoppingList = localStorage.getItem('carfix_shopping_list');
     const savedDatabase = localStorage.getItem('carfix_database');
+    const savedContractors = localStorage.getItem('carfix_contractors');
+    const savedPurchases = localStorage.getItem('carfix_contractor_purchases');
     
     if (savedShoppingList) {
       setShoppingList(JSON.parse(savedShoppingList));
     }
     if (savedDatabase) {
       setDatabase(JSON.parse(savedDatabase));
+    }
+    if (savedContractors) {
+      setContractors(JSON.parse(savedContractors));
+    }
+    if (savedPurchases) {
+      setContractorPurchases(JSON.parse(savedPurchases));
     }
   }, []);
 
@@ -37,6 +53,14 @@ const Index = () => {
   useEffect(() => {
     localStorage.setItem('carfix_database', JSON.stringify(database));
   }, [database]);
+
+  useEffect(() => {
+    localStorage.setItem('carfix_contractors', JSON.stringify(contractors));
+  }, [contractors]);
+
+  useEffect(() => {
+    localStorage.setItem('carfix_contractor_purchases', JSON.stringify(contractorPurchases));
+  }, [contractorPurchases]);
 
   const addNewProduct = () => {
     const newProduct: Product = {
@@ -113,7 +137,21 @@ const Index = () => {
       return;
     }
 
+    const newPurchases: ContractorPurchase[] = selectedProducts
+      .filter(p => p.contractorId)
+      .map(p => ({
+        id: `${p.id}-${Date.now()}`,
+        contractorId: p.contractorId!,
+        productName: p.name,
+        article: p.article,
+        quantity: p.quantity,
+        buyPrice: p.buyPrice,
+        totalPrice: p.buyPrice * p.quantity,
+        createdAt: new Date().toISOString(),
+      }));
+
     setDatabase(prev => [...prev, ...selectedProducts]);
+    setContractorPurchases(prev => [...prev, ...newPurchases]);
     setShoppingList(prev => prev.filter(p => !selectedIds.has(p.id)));
     setSelectedIds(new Set());
     
@@ -185,6 +223,68 @@ const Index = () => {
     });
   };
 
+  const addContractor = () => {
+    if (!newContractorName.trim()) {
+      toast({
+        title: 'Ошибка',
+        description: 'Введите название контрагента',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const newContractor: Contractor = {
+      id: Date.now().toString(),
+      name: newContractorName.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    setContractors(prev => [...prev, newContractor]);
+    setNewContractorName('');
+    setShowAddContractorDialog(false);
+    
+    toast({
+      title: 'Успешно!',
+      description: 'Контрагент добавлен',
+    });
+  };
+
+  const deleteContractor = (id: string) => {
+    setContractors(prev => prev.filter(c => c.id !== id));
+    setContractorPurchases(prev => prev.filter(p => p.contractorId !== id));
+    
+    toast({
+      title: 'Контрагент удален',
+      description: 'Контрагент и его история удалены',
+    });
+  };
+
+  const getContractorStats = (contractorId: string): ContractorStats => {
+    const purchases = contractorPurchases.filter(p => p.contractorId === contractorId);
+    const totalDebt = purchases.reduce((sum, p) => sum + p.totalPrice, 0);
+    
+    return {
+      totalProducts: purchases.length,
+      totalDebt,
+      purchases,
+    };
+  };
+
+  const resetContractorDebt = (contractorId: string) => {
+    setContractorPurchases(prev => 
+      prev.map(p => 
+        p.contractorId === contractorId 
+          ? { ...p, totalPrice: 0, buyPrice: 0 } 
+          : p
+      )
+    );
+    
+    toast({
+      title: 'Успешно!',
+      description: 'Долг обнулен',
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white sticky top-0 z-10">
@@ -214,12 +314,15 @@ const Index = () => {
 
       <main className="container mx-auto px-4 py-6">
         <Tabs defaultValue="shopping" className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
+          <TabsList className="grid w-full max-w-2xl mx-auto grid-cols-3 mb-6">
             <TabsTrigger value="shopping" className="text-base">
               Список покупок
             </TabsTrigger>
             <TabsTrigger value="database" className="text-base">
               Общая база
+            </TabsTrigger>
+            <TabsTrigger value="contractors" className="text-base">
+              Контрагенты
             </TabsTrigger>
           </TabsList>
 
@@ -262,6 +365,7 @@ const Index = () => {
                   isSelected={selectedIds.has(product.id)}
                   onToggleSelect={() => toggleSelection(product.id)}
                   showCheckbox={true}
+                  contractors={contractors}
                 />
               ))}
             </div>
@@ -338,8 +442,74 @@ const Index = () => {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="contractors" className="space-y-4">
+            {selectedContractor ? (
+              <ContractorDetail
+                contractor={selectedContractor}
+                stats={getContractorStats(selectedContractor.id)}
+                onBack={() => setSelectedContractor(null)}
+                onResetDebt={() => resetContractorDebt(selectedContractor.id)}
+              />
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold">
+                    Контрагентов: {contractors.length}
+                  </h2>
+                  <Button
+                    onClick={() => setShowAddContractorDialog(true)}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Icon name="Plus" size={20} className="mr-2" />
+                    Добавить контрагента
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {contractors.map(contractor => (
+                    <ContractorCard
+                      key={contractor.id}
+                      contractor={contractor}
+                      stats={getContractorStats(contractor.id)}
+                      onDelete={() => deleteContractor(contractor.id)}
+                      onClick={() => setSelectedContractor(contractor)}
+                      onResetDebt={() => resetContractorDebt(contractor.id)}
+                    />
+                  ))}
+                </div>
+
+                {contractors.length === 0 && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Icon name="Users" size={64} className="mx-auto mb-4 opacity-20" />
+                    <p className="text-lg">Нет контрагентов</p>
+                    <p className="text-sm mt-2">Добавьте контрагентов для отслеживания закупок</p>
+                  </div>
+                )}
+              </>
+            )}
+          </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={showAddContractorDialog} onOpenChange={setShowAddContractorDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Добавить контрагента</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="Название контрагента"
+            value={newContractorName}
+            onChange={(e) => setNewContractorName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addContractor()}
+          />
+          <DialogFooter>
+            <Button onClick={addContractor}>
+              Добавить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
-import { Product } from '@/types/product';
+import { Product, Contractor } from '@/types/product';
 
 interface ProductCardProps {
   product: Product;
@@ -16,6 +17,7 @@ interface ProductCardProps {
   onToggleSelect: () => void;
   showCheckbox: boolean;
   readOnly?: boolean;
+  contractors?: Contractor[];
 }
 
 const ProductCard = ({
@@ -26,11 +28,14 @@ const ProductCard = ({
   onToggleSelect,
   showCheckbox,
   readOnly = false,
+  contractors = [],
 }: ProductCardProps) => {
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [showHintDialog, setShowHintDialog] = useState(false);
+  const [showContractorDialog, setShowContractorDialog] = useState(false);
   const [tempPhoto, setTempPhoto] = useState<string | null>(null);
   const [tempHint, setTempHint] = useState('');
+  const [selectedContractorId, setSelectedContractorId] = useState<string>(product.contractorId || '');
   const [editMode, setEditMode] = useState({
     name: false,
     article: false,
@@ -80,6 +85,16 @@ const ProductCard = ({
   const openHintDialog = () => {
     setTempHint(product.hint);
     setShowHintDialog(true);
+  };
+
+  const openContractorDialog = () => {
+    setSelectedContractorId(product.contractorId || '');
+    setShowContractorDialog(true);
+  };
+
+  const confirmContractor = () => {
+    onUpdate({ contractorId: selectedContractorId || undefined });
+    setShowContractorDialog(false);
   };
 
   const handleFieldSave = (field: keyof typeof editMode, value: string | number) => {
@@ -134,6 +149,20 @@ const ProductCard = ({
               <Icon name="Lightbulb" size={20} />
             </Button>
           </div>
+
+          {!readOnly && contractors.length > 0 && (
+            <div className="md:col-span-1 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openContractorDialog}
+                className="w-12 h-12 p-0"
+                title="Выбрать контрагента"
+              >
+                <Icon name="User" size={20} />
+              </Button>
+            </div>
+          )}
 
           <div className="md:col-span-3">
             {editMode.name && !readOnly ? (
@@ -372,6 +401,32 @@ const ProductCard = ({
               </Button>
             </DialogFooter>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showContractorDialog} onOpenChange={setShowContractorDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Выбрать контрагента</DialogTitle>
+          </DialogHeader>
+          <Select value={selectedContractorId} onValueChange={setSelectedContractorId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Выберите контрагента" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Без контрагента</SelectItem>
+              {contractors.map(contractor => (
+                <SelectItem key={contractor.id} value={contractor.id}>
+                  {contractor.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button onClick={confirmContractor}>
+              Сохранить
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Card>
